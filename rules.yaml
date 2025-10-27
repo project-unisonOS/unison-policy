@@ -1,0 +1,26 @@
+# Example policy rules
+# Evaluated in order; first match wins.
+# Fields: match.intent_prefix, match.auth_scope, match.safety_context.data_classification
+# Decision: action=allow|deny|require_confirmation, reason
+
+- match:
+    intent_prefix: "summarize."
+    safety_context:
+      data_classification: "internal"
+  decision:
+    action: "allow"
+    reason: "internal-summary-allowed"
+
+- match:
+    intent_prefix: "summarize."
+    safety_context:
+      data_classification: "confidential"
+  decision:
+    action: "require_confirmation"
+    reason: "needs-confirmation-for-confidential"
+
+- match:
+    intent_prefix: "delete."
+  decision:
+    action: "deny"
+    reason: "destructive-actions-denied"
