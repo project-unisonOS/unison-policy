@@ -1,8 +1,73 @@
 # Example policy rules
 # Evaluated in order; first match wins.
 # Fields: match.intent_prefix, match.auth_scope, match.safety_context.data_classification
-# Decision: action=allow|deny|require_confirmation, reason
+#   match.time_window.start/end (HH:MM UTC), match.persons (list of person_id)
+# Decision: action=allow|deny|require_confirmation, reason, suggested_alternative (optional)
 
+# Inference rules - Phase 9
+- match:
+    intent_prefix: "summarize.doc"
+    safety_context:
+      data_classification: "public"
+  decision:
+    action: "allow"
+    reason: "public-data-summarization-allowed"
+
+- match:
+    intent_prefix: "summarize.doc"
+    safety_context:
+      data_classification: "internal"
+  decision:
+    action: "require_confirmation"
+    reason: "internal-data-summarization-needs-confirmation"
+    suggested_alternative: "Use local summarization or ensure data is non-sensitive."
+
+- match:
+    intent_prefix: "summarize.doc"
+    safety_context:
+      data_classification: "confidential"
+  decision:
+    action: "deny"
+    reason: "confidential-data-summarization-denied"
+    suggested_alternative: "Use offline summarization or downgrade data classification."
+
+- match:
+    intent_prefix: "analyze.code"
+    safety_context:
+      data_classification: "public"
+  decision:
+    action: "allow"
+    reason: "public-code-analysis-allowed"
+
+- match:
+    intent_prefix: "analyze.code"
+    safety_context:
+      data_classification: "internal"
+  decision:
+    action: "require_confirmation"
+    reason: "internal-code-analysis-needs-confirmation"
+
+- match:
+    intent_prefix: "analyze.code"
+    safety_context:
+      data_classification: "confidential"
+  decision:
+    action: "deny"
+    reason: "confidential-code-analysis-denied"
+
+- match:
+    intent_prefix: "translate.text"
+  decision:
+    action: "allow"
+    reason: "translation-allowed"
+
+- match:
+    intent_prefix: "generate.idea"
+  decision:
+    action: "allow"
+    reason: "idea-generation-allowed"
+
+# Legacy rules
 - match:
     intent_prefix: "summarize."
     safety_context:
@@ -18,9 +83,54 @@
   decision:
     action: "require_confirmation"
     reason: "needs-confirmation-for-confidential"
+    suggested_alternative: "Use internal summary mode or downgrade data classification."
 
 - match:
     intent_prefix: "delete."
   decision:
     action: "deny"
     reason: "destructive-actions-denied"
+    suggested_alternative: "Archive instead of delete, or require admin approval."
+
+# New Phase 7 examples
+- match:
+    intent_prefix: "admin."
+    auth_scope: "org.policy"
+  decision:
+    action: "allow"
+    reason: "org-policy-allowed"
+
+- match:
+    intent_prefix: "admin."
+    auth_scope: "person.local.explicit"
+  decision:
+    action: "deny"
+    reason: "admin-actions-require-org-policy"
+
+- match:
+    intent_prefix: "sensitive."
+    time_window:
+      start: "09:00"
+      end: "17:00"
+  decision:
+    action: "allow"
+    reason: "sensitive-allowed-during-business-hours"
+
+- match:
+    intent_prefix: "sensitive."
+  decision:
+    action: "require_confirmation"
+    reason: "sensitive-outside-hours-confirmation"
+
+- match:
+    intent_prefix: "beta."
+    persons: ["alice", "bob"]
+  decision:
+    action: "allow"
+    reason: "beta-feature-allowed-for-user"
+
+- match:
+    intent_prefix: "beta."
+  decision:
+    action: "deny"
+    reason: "beta-feature-not-allowed"
