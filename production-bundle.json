@@ -1,0 +1,88 @@
+{
+  "metadata": {
+    "algorithm": "RSA-SHA256",
+    "bundle_id": "production-bundle-v1",
+    "description": "Production policy bundle",
+    "environment": "production",
+    "issued_at": "2025-11-05T22:24:46.823218+00:00",
+    "issuer": "unison-policy-signer",
+    "version": "1.0.0"
+  },
+  "policies": [
+    {
+      "conditions": {
+        "allowed_purposes": [
+          "voice_assistant",
+          "testing"
+        ],
+        "required_scopes": [
+          "unison.echo"
+        ],
+        "time_restrictions": {
+          "end": "23:59",
+          "start": "00:00"
+        }
+      },
+      "description": "Allow users to use the echo skill",
+      "effect": "allow",
+      "id": "unison.echo",
+      "name": "Echo Capability"
+    },
+    {
+      "conditions": {
+        "allowed_purposes": [
+          "data_persistence",
+          "backup"
+        ],
+        "data_classification": [
+          "public",
+          "internal"
+        ],
+        "required_scopes": [
+          "unison.storage.write"
+        ]
+      },
+      "description": "Allow writing to storage",
+      "effect": "allow",
+      "id": "unison.storage.write",
+      "name": "Storage Write"
+    },
+    {
+      "conditions": {
+        "allowed_purposes": [
+          "content_analysis",
+          "summarization"
+        ],
+        "max_tokens": 1000,
+        "required_scopes": [
+          "unison.inference.text"
+        ]
+      },
+      "description": "Allow text-based inference",
+      "effect": "allow",
+      "id": "unison.inference.text",
+      "name": "Text Inference"
+    },
+    {
+      "conditions": {
+        "allowed_purposes": [
+          "system_administration"
+        ],
+        "required_scopes": [
+          "unison.admin"
+        ],
+        "requires_elevated_privileges": true
+      },
+      "description": "Require confirmation for sensitive operations",
+      "effect": "require_confirmation",
+      "id": "unison.sensitive.operations",
+      "name": "Sensitive Operations"
+    }
+  ],
+  "signature": {
+    "algorithm": "RSA-PSS-SHA256",
+    "hash": "4a41c5928901ee1ebbd599a3bd2cf7bfe6f3f2aefc6569ea76375bc87e3598be",
+    "key_id": "policy-signer-key-1",
+    "signature_b64": "fUvh06Dj6tm6CdphibRLRmjIq4gPkwigLPZqOnUO+1N6AVik8NOQ0uPTRKgmTODF9+KpDS7aFme2WQR3hgaHgKJiMQZyuTep7+QYiVTYF8y6YQzlbM0ufwesAXV9NJBx8vYV4apNf3X6WvRXdB4WuQ4g4BGhAUG/JnMGRVTfRjk3ryQhLDe1djWroE5pq9atwkTm7siTXkrYhr3RMFc5Mljt0Xgzrl9F69CtPUxNbRKGr6AR31WAfvFkxYW7+HWriJ+2BBlSjRaaLQCIj69TNcK1IR7MxiXg1RfWA2e1kNijaNrIgcjRcncgb0vPYi/5vqE0HE45xLIERFNH1pv/9g=="
+  }
+}

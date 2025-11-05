@@ -1,0 +1,86 @@
+{
+  "policies": [
+    {
+      "id": "unison.echo",
+      "name": "Echo Capability",
+      "description": "Allow users to use the echo skill",
+      "effect": "allow",
+      "conditions": {
+        "required_scopes": ["unison.echo"],
+        "allowed_purposes": ["voice_assistant", "testing"],
+        "time_restrictions": {
+          "start": "00:00",
+          "end": "23:59"
+        }
+      }
+    },
+    {
+      "id": "unison.storage.write",
+      "name": "Storage Write",
+      "description": "Allow writing to storage",
+      "effect": "allow",
+      "conditions": {
+        "required_scopes": ["unison.storage.write"],
+        "allowed_purposes": ["data_persistence", "backup"],
+        "data_classification": ["public", "internal"]
+      }
+    },
+    {
+      "id": "unison.inference.text",
+      "name": "Text Inference",
+      "description": "Allow text-based inference",
+      "effect": "allow",
+      "conditions": {
+        "required_scopes": ["unison.inference.text"],
+        "allowed_purposes": ["content_analysis", "summarization"],
+        "max_tokens": 1000
+      }
+    },
+    {
+      "id": "unison.context.read",
+      "name": "Context Read",
+      "description": "Allow reading user context",
+      "effect": "allow",
+      "conditions": {
+        "required_scopes": ["unison.context.read"],
+        "allowed_purposes": ["personalization", "context_awareness"]
+      }
+    },
+    {
+      "id": "unison.admin.operations",
+      "name": "Administrative Operations",
+      "description": "Require confirmation for sensitive operations",
+      "effect": "require_confirmation",
+      "conditions": {
+        "required_scopes": ["unison.admin"],
+        "allowed_purposes": ["system_administration"],
+        "requires_elevated_privileges": true
+      }
+    },
+    {
+      "id": "unison.sensitive.data",
+      "name": "Sensitive Data Access",
+      "description": "Deny access to sensitive data without special authorization",
+      "effect": "deny",
+      "conditions": {
+        "data_classification": ["confidential", "restricted"],
+        "requires_special_auth": true
+      }
+    }
+  ],
+  "metadata": {
+    "bundle_id": "edge-policy-bundle-v1",
+    "version": "1.0.0",
+    "description": "Edge deployment policy bundle for Unison platform",
+    "environment": "edge",
+    "author": "unison-policy-signer",
+    "issued_at": "2025-01-01T00:00:00Z",
+    "expires_at": "2025-12-31T23:59:59Z"
+  },
+  "signature": {
+    "algorithm": "RSA-PSS-SHA256",
+    "key_id": "policy-signer-key-1",
+    "signature_b64": "edge-policy-signature-placeholder",
+    "hash": "placeholder-hash"
+  }
+}

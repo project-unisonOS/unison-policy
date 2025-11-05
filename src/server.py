@@ -10,6 +10,7 @@ import yaml
 from datetime import datetime, timezone
 from unison_common.logging import configure_logging, log_json
 from collections import defaultdict
+from bundle_signer import PolicyBundleSigner
 
 app = FastAPI(title="unison-policy")
 
@@ -20,7 +21,10 @@ _metrics = defaultdict(int)
 _start_time = time.time()
 
 RULES_PATH = os.getenv("UNISON_POLICY_RULES", "rules.yaml")
+BUNDLE_PATH = os.getenv("UNISON_POLICY_BUNDLE", "bundle.signed.json")
 _RULES: List[Dict[str, Any]] = []
+_BUNDLE_SIGNER = None
+_CURRENT_BUNDLE: Dict[str, Any] = None
 
 def load_rules(path: str) -> List[Dict[str, Any]]:
     if not os.path.exists(path):
@@ -35,6 +39,68 @@ def load_rules(path: str) -> List[Dict[str, Any]]:
     return []
 
 _RULES = load_rules(RULES_PATH)
+
+def load_bundle(path: str) -> Optional[Dict[str, Any]]:
+    """Load and verify a signed policy bundle"""
+    if not os.path.exists(path):
+        logger.info(f"Bundle file not found: {path}")
+        return None
+    
+    try:
+        # Initialize bundle signer
+        global _BUNDLE_SIGNER
+        if _BUNDLE_SIGNER is None:
+            _BUNDLE_SIGNER = PolicyBundleSigner()
+        
+        # Load bundle
+        bundle = _BUNDLE_SIGNER.load_bundle(path)
+        
+        # Verify signature
+        if _BUNDLE_SIGNER.verify_bundle(bundle):
+            logger.info(f"Loaded and verified bundle: {bundle.get('metadata', {}).get('bundle_id', 'unknown')}")
+            return bundle
+        else:
+            logger.error(f"Bundle verification failed: {path}")
+            return None
+            
+    except Exception as e:
+        logger.exception(f"Failed to load bundle {path}: {e}")
+        return None
+
+def load_policies_from_bundle(bundle: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Extract policies from a verified bundle"""
+    policies = bundle.get('policies', [])
+    
+    # Convert new policy format to legacy rule format for compatibility
+    rules = []
+    for policy in policies:
+        rule = {
+            "match": {
+                "intent_prefix": policy.get("id"),
+                "auth_scope": None,
+                "safety_context": {
+                    "data_classification": policy.get("conditions", {}).get("data_classification")
+                },
+                "time_window": policy.get("conditions", {}).get("time_restrictions", {}),
+                "persons": None
+            },
+            "decision": {
+                "action": policy.get("effect", "allow"),
+                "reason": policy.get("description", f"policy:{policy.get('id', 'unknown')}"),
+                "suggested_alternative": None
+            }
+        }
+        rules.append(rule)
+    
+    return rules
+
+# Initialize bundle if available
+_CURRENT_BUNDLE = load_bundle(BUNDLE_PATH)
+if _CURRENT_BUNDLE:
+    _RULES = load_policies_from_bundle(_CURRENT_BUNDLE)
+    logger.info(f"Loaded {_RULES} policies from signed bundle")
+else:
+    logger.info(f"Using {_RULES} rules from YAML file")
 
 def _time_in_window(start: str, end: str) -> bool:
     """Return True if current UTC time is within HH:MM window (inclusive)."""
@@ -209,6 +275,113 @@ def evaluate(
         "capability_id": capability_id,
         "decision": decision,
     }
+
+# --- Bundle Management Endpoints ---
+
+@app.get("/bundle")
+def get_current_bundle():
+    """Get information about the currently loaded policy bundle"""
+    global _CURRENT_BUNDLE
+    
+    if _CURRENT_BUNDLE:
+        metadata = _CURRENT_BUNDLE.get('metadata', {})
+        return {
+            "bundle_loaded": True,
+            "bundle_id": metadata.get('bundle_id'),
+            "version": metadata.get('version'),
+            "issued_at": metadata.get('issued_at'),
+            "issuer": metadata.get('issuer'),
+            "policies_count": len(_CURRENT_BUNDLE.get('policies', [])),
+            "signature_verified": True
+        }
+    else:
+        return {
+            "bundle_loaded": False,
+            "rules_count": len(_RULES),
+            "source": "yaml_file"
+        }
+
+@app.post("/bundle/load")
+def load_bundle_endpoint(bundle_path: str = Body(..., embed=True)):
+    """Load a new signed policy bundle"""
+    global _CURRENT_BUNDLE, _RULES
+    
+    if not os.path.exists(bundle_path):
+        raise HTTPException(status_code=404, detail=f"Bundle file not found: {bundle_path}")
+    
+    # Load and verify bundle
+    bundle = load_bundle(bundle_path)
+    if not bundle:
+        raise HTTPException(status_code=400, detail="Bundle verification failed")
+    
+    # Update current bundle and rules
+    _CURRENT_BUNDLE = bundle
+    _RULES = load_policies_from_bundle(bundle)
+    
+    metadata = bundle.get('metadata', {})
+    
+    log_json(
+        logging.INFO,
+        "bundle_loaded",
+        service="unison-policy",
+        bundle_id=metadata.get('bundle_id'),
+        version=metadata.get('version'),
+        policies_count=len(_RULES)
+    )
+    
+    return {
+        "ok": True,
+        "bundle_id": metadata.get('bundle_id'),
+        "version": metadata.get('version'),
+        "policies_loaded": len(_RULES)
+    }
+
+@app.post("/bundle/verify")
+def verify_bundle_endpoint(bundle_path: str = Body(..., embed=True)):
+    """Verify a signed policy bundle without loading it"""
+    if not os.path.exists(bundle_path):
+        raise HTTPException(status_code=404, detail=f"Bundle file not found: {bundle_path}")
+    
+    # Initialize bundle signer if needed
+    global _BUNDLE_SIGNER
+    if _BUNDLE_SIGNER is None:
+        _BUNDLE_SIGNER = PolicyBundleSigner()
+    
+    # Load and verify bundle
+    try:
+        bundle = _BUNDLE_SIGNER.load_bundle(bundle_path)
+        is_valid = _BUNDLE_SIGNER.verify_bundle(bundle)
+        
+        if is_valid:
+            metadata = bundle.get('metadata', {})
+            return {
+                "valid": True,
+                "bundle_id": metadata.get('bundle_id'),
+                "version": metadata.get('version'),
+                "issued_at": metadata.get('issued_at'),
+                "issuer": metadata.get('issuer'),
+                "policies_count": len(bundle.get('policies', []))
+            }
+        else:
+            return {"valid": False, "error": "Signature verification failed"}
+            
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Bundle verification error: {str(e)}")
+
+@app.get("/bundle/policies")
+def get_bundle_policies():
+    """Get all policies from the current bundle or rules"""
+    if _CURRENT_BUNDLE:
+        return {
+            "source": "signed_bundle",
+            "bundle_id": _CURRENT_BUNDLE.get('metadata', {}).get('bundle_id'),
+            "policies": _CURRENT_BUNDLE.get('policies', [])
+        }
+    else:
+        return {
+            "source": "yaml_rules",
+            "rules": _RULES
+        }
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8083)

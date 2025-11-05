@@ -1,0 +1,47 @@
+- conditions:
+    allowed_purposes:
+    - voice_assistant
+    - testing
+    required_scopes:
+    - unison.echo
+    time_restrictions:
+      end: '23:59'
+      start: 00:00
+  description: Allow users to use the echo skill
+  effect: allow
+  id: unison.echo
+  name: Echo Capability
+- conditions:
+    allowed_purposes:
+    - data_persistence
+    - backup
+    data_classification:
+    - public
+    - internal
+    required_scopes:
+    - unison.storage.write
+  description: Allow writing to storage
+  effect: allow
+  id: unison.storage.write
+  name: Storage Write
+- conditions:
+    allowed_purposes:
+    - content_analysis
+    - summarization
+    max_tokens: 1000
+    required_scopes:
+    - unison.inference.text
+  description: Allow text-based inference
+  effect: allow
+  id: unison.inference.text
+  name: Text Inference
+- conditions:
+    allowed_purposes:
+    - system_administration
+    required_scopes:
+    - unison.admin
+    requires_elevated_privileges: true
+  description: Require confirmation for sensitive operations
+  effect: require_confirmation
+  id: unison.sensitive.operations
+  name: Sensitive Operations
