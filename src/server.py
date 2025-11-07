@@ -5,12 +5,13 @@ import logging
 import json
 import time
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 import yaml
 from datetime import datetime, timezone
 from unison_common.logging import configure_logging, log_json
 from collections import defaultdict
 from bundle_signer import PolicyBundleSigner
+from hot_reload import hot_reload_bundle, get_reload_history, get_reload_stats
 
 app = FastAPI(title="unison-policy")
 
@@ -22,9 +23,18 @@ _start_time = time.time()
 
 RULES_PATH = os.getenv("UNISON_POLICY_RULES", "rules.yaml")
 BUNDLE_PATH = os.getenv("UNISON_POLICY_BUNDLE", "bundle.signed.json")
-_RULES: List[Dict[str, Any]] = []
+
+# Use reference dictionaries for hot-reload compatibility
+_BUNDLE_REF = {'value': None}  # Current bundle
+_RULES_REF = {'value': []}  # Current rules
+_VERSION_REF = {'value': '0.0.0', 'loaded_at': None}  # Current version and load time
 _BUNDLE_SIGNER = None
-_CURRENT_BUNDLE: Dict[str, Any] = None
+
+# Convenience accessors (for backward compatibility)
+def _get_current_bundle(): return _BUNDLE_REF['value']
+def _get_current_rules(): return _RULES_REF['value']
+def _get_current_version(): return _VERSION_REF['value']
+def _get_loaded_at(): return _VERSION_REF.get('loaded_at')
 
 def load_rules(path: str) -> List[Dict[str, Any]]:
     if not os.path.exists(path):
@@ -38,7 +48,8 @@ def load_rules(path: str) -> List[Dict[str, Any]]:
         logger.exception("failed_to_load_rules: %s", e)
     return []
 
-_RULES = load_rules(RULES_PATH)
+# Initialize with YAML rules as fallback
+_RULES_REF['value'] = load_rules(RULES_PATH)
 
 def load_bundle(path: str) -> Optional[Dict[str, Any]]:
     """Load and verify a signed policy bundle"""
@@ -94,13 +105,20 @@ def load_policies_from_bundle(bundle: Dict[str, Any]) -> List[Dict[str, Any]]:
     
     return rules
 
+# Initialize bundle signer
+if _BUNDLE_SIGNER is None:
+    _BUNDLE_SIGNER = PolicyBundleSigner()
+
 # Initialize bundle if available
-_CURRENT_BUNDLE = load_bundle(BUNDLE_PATH)
-if _CURRENT_BUNDLE:
-    _RULES = load_policies_from_bundle(_CURRENT_BUNDLE)
-    logger.info(f"Loaded {_RULES} policies from signed bundle")
+bundle = load_bundle(BUNDLE_PATH)
+if bundle:
+    _BUNDLE_REF['value'] = bundle
+    _RULES_REF['value'] = load_policies_from_bundle(bundle)
+    _VERSION_REF['value'] = bundle.get('metadata', {}).get('version', '0.0.0')
+    _VERSION_REF['loaded_at'] = datetime.now(timezone.utc).isoformat()
+    logger.info(f"Loaded {len(_RULES_REF['value'])} policies from signed bundle v{_VERSION_REF['value']}")
 else:
-    logger.info(f"Using {_RULES} rules from YAML file")
+    logger.info(f"Using {len(_RULES_REF['value'])} rules from YAML file")
 
 def _time_in_window(start: str, end: str) -> bool:
     """Return True if current UTC time is within HH:MM window (inclusive)."""
@@ -122,6 +140,7 @@ def _matches_persons(persons: List[str], person_id: str) -> bool:
     """Return True if person_id is in the allowed list."""
     return isinstance(persons, list) and person_id in persons
 
+@app.get("/healthz")
 @app.get("/health")
 def health(request: Request):
     _metrics["/health"] += 1
@@ -133,12 +152,17 @@ def health(request: Request):
 def metrics():
     """Prometheus text-format metrics."""
     uptime = time.time() - _start_time
+    
+    # Get reload stats
+    reload_stats = get_reload_stats()
+    
     lines = [
         "# HELP unison_policy_requests_total Total number of requests by endpoint",
         "# TYPE unison_policy_requests_total counter",
     ]
     for k, v in _metrics.items():
         lines.append(f'unison_policy_requests_total{{endpoint="{k}"}} {v}')
+    
     lines.extend([
         "",
         "# HELP unison_policy_uptime_seconds Service uptime in seconds",
@@ -147,23 +171,86 @@ def metrics():
         "",
         "# HELP unison_policy_rules_loaded Number of loaded policy rules",
         "# TYPE unison_policy_rules_loaded gauge",
-        f"unison_policy_rules_loaded {len(_RULES)}",
+        f"unison_policy_rules_loaded {len(_get_current_rules())}",
+        "",
+        "# HELP unison_policy_bundle_version Current policy bundle version",
+        "# TYPE unison_policy_bundle_version gauge",
+        f'unison_policy_bundle_version{{version="{_get_current_version()}"}} 1',
+        "",
+        "# HELP unison_policy_reload_total Total number of bundle reload attempts",
+        "# TYPE unison_policy_reload_total counter",
+        f"unison_policy_reload_total {reload_stats['total_reloads']}",
+        "",
+        "# HELP unison_policy_reload_success_total Total number of successful bundle reloads",
+        "# TYPE unison_policy_reload_success_total counter",
+        f"unison_policy_reload_success_total {reload_stats['successful_reloads']}",
+        "",
+        "# HELP unison_policy_reload_failure_total Total number of failed bundle reloads",
+        "# TYPE unison_policy_reload_failure_total counter",
+        f"unison_policy_reload_failure_total {reload_stats['failed_reloads']}",
+        "",
+        "# HELP unison_policy_reload_success_rate Percentage of successful reloads",
+        "# TYPE unison_policy_reload_success_rate gauge",
+        f"unison_policy_reload_success_rate {reload_stats['success_rate']}",
+        "",
+        "# HELP unison_policy_reload_duration_seconds Average reload duration in seconds",
+        "# TYPE unison_policy_reload_duration_seconds gauge",
+        f"unison_policy_reload_duration_seconds {reload_stats['avg_duration_ms'] / 1000}",
     ])
+    
+    # Add bundle loaded timestamp if available
+    loaded_at = _get_loaded_at()
+    if loaded_at:
+        lines.extend([
+            "",
+            "# HELP unison_policy_bundle_loaded_timestamp Unix timestamp when bundle was loaded",
+            "# TYPE unison_policy_bundle_loaded_timestamp gauge",
+            f"unison_policy_bundle_loaded_timestamp {int(datetime.fromisoformat(loaded_at).timestamp())}",
+        ])
+    
     return "\n".join(lines)
 
+@app.get("/readyz")
 @app.get("/ready")
 def ready(request: Request):
     event_id = request.headers.get("X-Event-ID")
-    # Future: check audit log backend / key store
-    log_json(logging.INFO, "ready", service="unison-policy", event_id=event_id, ready=True)
-    return {"ready": True}
+    
+    # Check if bundle is loaded and not stale
+    loaded_at = _get_loaded_at()
+    bundle_age_hours = None
+    is_stale = False
+    
+    if loaded_at:
+        loaded_time = datetime.fromisoformat(loaded_at)
+        age = datetime.now(timezone.utc) - loaded_time
+        bundle_age_hours = age.total_seconds() / 3600
+        is_stale = bundle_age_hours > 24  # Warn if bundle is > 24 hours old
+    
+    ready_status = {
+        "ready": True,
+        "bundle_version": _get_current_version(),
+        "bundle_loaded_at": loaded_at,
+        "bundle_age_hours": round(bundle_age_hours, 2) if bundle_age_hours else None,
+        "bundle_stale": is_stale
+    }
+    
+    log_json(
+        logging.INFO, 
+        "ready", 
+        service="unison-policy", 
+        event_id=event_id, 
+        ready=True,
+        bundle_version=_get_current_version()
+    )
+    
+    return ready_status
 
 
 @app.get("/rules/summary")
 def rules_summary(request: Request):
     _metrics["/rules/summary"] += 1
     event_id = request.headers.get("X-Event-ID")
-    summary = {"count": len(_RULES), "path": RULES_PATH}
+    summary = {"count": len(_get_current_rules()), "path": RULES_PATH}
     log_json(logging.INFO, "rules_summary", service="unison-policy", event_id=event_id, count=summary["count"]) 
     return summary
 
@@ -171,8 +258,13 @@ def rules_summary(request: Request):
 def list_rules(request: Request):
     _metrics["/rules"] += 1
     event_id = request.headers.get("X-Event-ID")
-    log_json(logging.INFO, "rules_list", service="unison-policy", event_id=event_id, count=len(_RULES))
-    return {"ok": True, "rules": _RULES, "count": len(_RULES)}
+    log_json(logging.INFO, "rules_list", service="unison-policy", event_id=event_id, count=len(_get_current_rules()))
+    return {
+        "ok": True,
+        "rules": _get_current_rules(),
+        "count": len(_get_current_rules()),
+        "policy_version": _get_current_version()
+    }
 
 @app.post("/rules")
 def update_rules(request: Request, body: Dict[str, Any] = Body(...)):
@@ -192,10 +284,9 @@ def update_rules(request: Request, body: Dict[str, Any] = Body(...)):
         if "match" not in rule or "decision" not in rule:
             raise HTTPException(status_code=400, detail=f"Rule {i} missing 'match' or 'decision'")
     # Accept the new rule set
-    global _RULES
-    _RULES = rules
-    log_json(logging.INFO, "rules_updated", service="unison-policy", event_id=event_id, count=len(_RULES))
-    return {"ok": True, "rules": len(_RULES)}
+    _RULES_REF['value'] = rules
+    log_json(logging.INFO, "rules_updated", service="unison-policy", event_id=event_id, count=len(rules))
+    return {"ok": True, "rules": len(rules)}
 
 @app.post("/evaluate")
 def evaluate(
@@ -216,7 +307,7 @@ def evaluate(
     }
 
     try:
-        for rule in _RULES:
+        for rule in _get_current_rules():
             match = rule.get("match", {})
             dec = rule.get("decision", {})
             intent_prefix = match.get("intent_prefix")
@@ -269,11 +360,12 @@ def evaluate(
         capability_id=capability_id,
         person_id=person_id,
         decision=decision,
-        rules=len(_RULES),
+        rules=len(_get_current_rules()),
     )
     return {
         "capability_id": capability_id,
         "decision": decision,
+        "policy_version": _get_current_version(),
     }
 
 # --- Bundle Management Endpoints ---
@@ -281,60 +373,58 @@ def evaluate(
 @app.get("/bundle")
 def get_current_bundle():
     """Get information about the currently loaded policy bundle"""
-    global _CURRENT_BUNDLE
+    bundle = _get_current_bundle()
     
-    if _CURRENT_BUNDLE:
-        metadata = _CURRENT_BUNDLE.get('metadata', {})
+    if bundle:
+        metadata = bundle.get('metadata', {})
         return {
             "bundle_loaded": True,
             "bundle_id": metadata.get('bundle_id'),
             "version": metadata.get('version'),
             "issued_at": metadata.get('issued_at'),
             "issuer": metadata.get('issuer'),
-            "policies_count": len(_CURRENT_BUNDLE.get('policies', [])),
+            "loaded_at": _get_loaded_at(),
+            "policies_count": len(bundle.get('policies', [])),
             "signature_verified": True
         }
     else:
         return {
             "bundle_loaded": False,
-            "rules_count": len(_RULES),
+            "rules_count": len(_get_current_rules()),
             "source": "yaml_file"
         }
 
-@app.post("/bundle/load")
-def load_bundle_endpoint(bundle_path: str = Body(..., embed=True)):
-    """Load a new signed policy bundle"""
-    global _CURRENT_BUNDLE, _RULES
+@app.post("/reload")
+@app.post("/bundle/reload")
+def reload_bundle_endpoint(bundle_path: str = Body(default=None, embed=True)):
+    """
+    Hot-reload policy bundle atomically
     
-    if not os.path.exists(bundle_path):
-        raise HTTPException(status_code=404, detail=f"Bundle file not found: {bundle_path}")
+    If bundle_path is provided, loads that specific bundle.
+    Otherwise, reloads from the default BUNDLE_PATH.
+    """
+    _metrics["/reload"] += 1
     
-    # Load and verify bundle
-    bundle = load_bundle(bundle_path)
-    if not bundle:
-        raise HTTPException(status_code=400, detail="Bundle verification failed")
+    path = bundle_path or BUNDLE_PATH
     
-    # Update current bundle and rules
-    _CURRENT_BUNDLE = bundle
-    _RULES = load_policies_from_bundle(bundle)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail=f"Bundle file not found: {path}")
     
-    metadata = bundle.get('metadata', {})
-    
-    log_json(
-        logging.INFO,
-        "bundle_loaded",
-        service="unison-policy",
-        bundle_id=metadata.get('bundle_id'),
-        version=metadata.get('version'),
-        policies_count=len(_RULES)
+    # Perform hot-reload
+    result = hot_reload_bundle(
+        bundle_path=path,
+        bundle_signer=_BUNDLE_SIGNER,
+        load_bundle_func=load_bundle,
+        load_policies_func=load_policies_from_bundle,
+        current_bundle_ref=_BUNDLE_REF,
+        current_rules_ref=_RULES_REF,
+        current_version_ref=_VERSION_REF
     )
     
-    return {
-        "ok": True,
-        "bundle_id": metadata.get('bundle_id'),
-        "version": metadata.get('version'),
-        "policies_loaded": len(_RULES)
-    }
+    if result["success"]:
+        return result
+    else:
+        raise HTTPException(status_code=500, detail=result["error"])
 
 @app.post("/bundle/verify")
 def verify_bundle_endpoint(bundle_path: str = Body(..., embed=True)):
@@ -371,17 +461,30 @@ def verify_bundle_endpoint(bundle_path: str = Body(..., embed=True)):
 @app.get("/bundle/policies")
 def get_bundle_policies():
     """Get all policies from the current bundle or rules"""
-    if _CURRENT_BUNDLE:
+    bundle = _get_current_bundle()
+    if bundle:
         return {
             "source": "signed_bundle",
-            "bundle_id": _CURRENT_BUNDLE.get('metadata', {}).get('bundle_id'),
-            "policies": _CURRENT_BUNDLE.get('policies', [])
+            "bundle_id": bundle.get('metadata', {}).get('bundle_id'),
+            "policies": bundle.get('policies', [])
         }
     else:
         return {
             "source": "yaml_rules",
-            "rules": _RULES
+            "rules": _get_current_rules()
         }
+
+@app.get("/reload/history")
+def get_reload_history_endpoint():
+    """Get hot-reload history (last 10 reloads)"""
+    return {
+        "history": get_reload_history()
+    }
+
+@app.get("/reload/stats")
+def get_reload_stats_endpoint():
+    """Get hot-reload statistics"""
+    return get_reload_stats()
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8083)
