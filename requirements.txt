@@ -9,4 +9,4 @@ python-jose[cryptography]==3.3.0
 redis==5.0.1
 
 # unison-common package (local install)
-../unison-common/dist/unison_common-0.1.0-py3-none-any.whl
+git+https://github.com/project-unisonOS/unison-common.git@main
