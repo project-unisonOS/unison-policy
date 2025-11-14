@@ -27,8 +27,8 @@
     safety_context:
       data_classification: "confidential"
   decision:
-    action: "deny"
-    reason: "confidential-data-summarization-denied"
+    action: "require_confirmation"
+    reason: "confidential-data-summarization-needs-confirmation"
     suggested_alternative: "Use offline summarization or downgrade data classification."
 
 - match:
