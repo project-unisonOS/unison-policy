@@ -1,3 +1,4 @@
+-c ../constraints.txt
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
 pyyaml==6.0.2
@@ -9,4 +10,4 @@ python-jose[cryptography]==3.3.0
 redis==5.0.1
 
 # unison-common package (local install)
-git+https://github.com/project-unisonOS/unison-common.git@main
+-e ../unison-common
