@@ -237,7 +237,7 @@ with open("bundle.signed.json", "w") as f:
 
 ## Verifying a Bundle
 
-### Using the Bundle Signer
+### Using the Bundle Signer (CI/CD example)
 
 ```python
 from bundle_signer import PolicyBundleSigner

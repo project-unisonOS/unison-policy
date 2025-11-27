@@ -2,6 +2,9 @@
 
 The policy service is the safety and consent gate for the Unison system, providing real-time policy evaluation, consent management, and comprehensive audit logging.
 
+## Status
+Core service (active) — enforcement layer for orchestrator; devstack port `8083`.
+
 ## Purpose
 
 The policy service:
@@ -56,7 +59,7 @@ python src/server.py
 ```bash
 # Using the development stack
 cd ../unison-devstack
-docker-compose up -d policy
+docker compose up -d policy
 
 # Health check
 curl http://localhost:8083/health
@@ -104,11 +107,13 @@ curl -X POST http://localhost:8083/consent \
   }'
 ```
 
-[Full API Documentation](../../unison-docs/developer/api-reference/policy.md)
+Additional docs: workspace `docs/unison-architecture-overview.md` and `docs/developer-guide.md` cover how this service
+fits into the platform; legacy `unison-docs` references are archived.
 
 ## Configuration
 
 ### Environment Variables
+Copy `.env.example` and adjust for your environment.
 ```bash
 # Service Configuration
 POLICY_PORT=8083                     # Service port
@@ -220,8 +225,6 @@ pytest tests/security/
 4. Ensure all policy and security tests pass
 5. Submit a pull request with detailed description
 
-[Development Guide](../../unison-docs/developer/contributing.md)
-
 ## Security and Privacy
 
 ### Policy Enforcement
@@ -243,8 +246,6 @@ pytest tests/security/
 - **Audit Requirements**: Comprehensive audit logging for compliance
 - **Data Protection**: Privacy by design in all policy decisions
 - **Safety Standards**: Emergency and safety protocol compliance
-
-[Security Documentation](../../unison-docs/operations/security.md)
 
 ## Architecture
 
@@ -278,8 +279,6 @@ pytest tests/security/
 5. **Decision**: Return allow/deny with reasoning
 6. **Audit**: Log decision for compliance
 
-[Architecture Documentation](../../unison-docs/developer/architecture.md)
-
 ## Monitoring
 
 ### Health Checks
@@ -303,8 +302,6 @@ Structured JSON logging with correlation IDs:
 - Safety protocol activations
 - Rule changes and updates
 - Compliance and audit events
-
-[Monitoring Guide](../../unison-docs/operations/monitoring.md)
 
 ## Emergency and Safety
 
@@ -350,7 +347,7 @@ curl -X GET http://localhost:8083/safety/person-456 \
 
 ### Common Issues
 
-**Policy Evaluation Failures**
+#### Policy Evaluation Failures
 ```bash
 # Check service health
 curl http://localhost:8083/health
@@ -363,7 +360,7 @@ curl -X GET http://localhost:8083/rules \
 python scripts/validate_rules.py /config/rules.json
 ```
 
-**Consent Issues**
+#### Consent Issues
 ```bash
 # Check consent status
 curl -X GET http://localhost:8083/consent/consent-123 \
@@ -373,13 +370,13 @@ curl -X GET http://localhost:8083/consent/consent-123 \
 python scripts/test_consent.py --person-id person-456
 ```
 
-**Performance Issues**
+#### Performance Issues
 ```bash
 # Check policy metrics
 curl http://localhost:8083/metrics
 
 # Monitor rule evaluation performance
-docker-compose logs policy | grep "evaluation_time"
+docker compose logs policy | grep "evaluation_time"
 ```
 
 ### Debug Mode
@@ -388,22 +385,25 @@ docker-compose logs policy | grep "evaluation_time"
 LOG_LEVEL=DEBUG POLICY_DEBUG_RULES=true python src/server.py
 
 # Monitor policy decisions
-docker-compose logs -f policy | jq '.'
+docker compose logs -f policy | jq '.'
 
 # Test policy engine
 python scripts/test_policy.py --all
 ```
 
-[Troubleshooting Guide](../../unison-docs/people/troubleshooting.md)
-
 ## Version Compatibility
 
-| Policy Version | Unison Common | Auth Service | Minimum Docker |
-|-----------------|---------------|--------------|----------------|
-| 1.0.0           | 1.0.0         | 1.0.0        | 20.10+         |
-| 0.9.x           | 0.9.x         | 0.9.x        | 20.04+         |
+### Compatibility snapshot
+- Policy `1.0.0` ↔ unison-common `1.0.0`, auth `1.0.0`, Docker 20.10+
+- Policy `0.9.x` ↔ unison-common `0.9.x`, auth `0.9.x`, Docker 20.04+
+- For full history, see [`unison-spec/docs/compatibility-matrix.md`](../unison-spec/docs/compatibility-matrix.md).
 
-[Compatibility Matrix](../../unison-spec/specs/version-compatibility.md)
+## Testing (local)
+```bash
+python3 -m venv .venv && . .venv/bin/activate
+pip install -c ../constraints.txt -r requirements.txt
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 OTEL_SDK_DISABLED=true python -m pytest
+```
 
 ## License
 
@@ -411,7 +411,6 @@ Licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.
 
 ## Support
 
-- **Documentation**: [Project Unison Docs](https://github.com/project-unisonOS/unison-docs)
 - **Issues**: [GitHub Issues](https://github.com/project-unisonOS/unison-policy/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/project-unisonOS/unison-policy/discussions)
-- **Security**: Report security issues to security@unisonos.org
+- **Security**: Report security issues to [security@unisonos.org](mailto:security@unisonos.org)

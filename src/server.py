@@ -11,6 +11,10 @@ from typing import Any, Dict, List, Optional
 import yaml
 from datetime import datetime, timezone, timedelta
 from unison_common.logging import configure_logging, log_json
+try:
+    from unison_common import BatonMiddleware
+except Exception:
+    BatonMiddleware = None
 from collections import defaultdict
 try:
     from .bundle_signer import PolicyBundleSigner
@@ -35,6 +39,8 @@ except ImportError:  # pragma: no cover
     from settings import PolicyServiceSettings  # type: ignore
 
 app = FastAPI(title="unison-policy")
+if BatonMiddleware:
+    app.add_middleware(BatonMiddleware)
 
 logger = configure_logging("unison-policy")
 

@@ -27,12 +27,16 @@ Recommended core repos to clone locally:
 - `unison-context`
 - `unison-storage`
 - `unison-devstack`
-- `unison-docs`
+- `unison-policy`
+- `unison-auth`
+- `unison-common`
 
 Keep all under a shared parent folder, e.g.:
 ```
 /git/unison/
 ```
+
+Workspace docs live at the root `docs/` directory; `unison-docs` is archived.
 
 ---
 
@@ -41,19 +45,19 @@ From inside `unison-devstack`:
 ```bash
 docker compose up --build -d
 ```
-This starts:
-- Orchestrator  
-- Context service  
-- Storage service  
+This starts orchestrator, context, storage, policy, auth, consent, inference, renderer, IO stubs, Redis, and Postgres.
 
 Check containers:
 ```bash
 docker compose ps
 ```
 
-Verify orchestration:
+Verify orchestration and dependencies:
 ```bash
 curl http://localhost:8080/health
+curl http://localhost:8081/health
+curl http://localhost:8082/health
+curl http://localhost:8083/health
 ```
 
 ---
@@ -84,7 +88,7 @@ When adding new features or docs:
 Each core repo will include its own test suite.  
 Run with:
 ```bash
-pytest
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 OTEL_SDK_DISABLED=true pytest
 ```
 or the local container workflow:
 ```bash
