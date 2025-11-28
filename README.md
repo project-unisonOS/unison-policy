@@ -107,7 +107,7 @@ curl -X POST http://localhost:8083/consent \
   }'
 ```
 
-Additional docs: workspace `docs/unison-architecture-overview.md` and `docs/developer-guide.md` cover how this service
+Additional docs: workspace `unison-docs/dev/unison-architecture-overview.md` and `unison-docs/dev/developer-guide.md` cover how this service
 fits into the platform; legacy `unison-docs` references are archived.
 
 ## Configuration
@@ -396,7 +396,7 @@ python scripts/test_policy.py --all
 ### Compatibility snapshot
 - Policy `1.0.0` ↔ unison-common `1.0.0`, auth `1.0.0`, Docker 20.10+
 - Policy `0.9.x` ↔ unison-common `0.9.x`, auth `0.9.x`, Docker 20.04+
-- For full history, see [`unison-spec/docs/compatibility-matrix.md`](../unison-spec/docs/compatibility-matrix.md).
+- For full history, see [`unison-docs/dev/compatibility-matrix.md`](../unison-docs/dev/compatibility-matrix.md).
 
 ## Testing (local)
 ```bash

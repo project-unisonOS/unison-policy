@@ -5,7 +5,7 @@
 The policy service supports atomic hot-reload of policy bundles without dropping requests or causing downtime. This allows you to update policies in production without restarting the service.
 
 > **Status:** Active. Endpoints verified against `src/server.py` (`/reload`, `/bundle/reload`, `/reload/history`, `/reload/stats`). Defaults rely on `UNISON_POLICY_BUNDLE`.
-> **Note:** If you are only using the workspace devstack, refer to `docs/developer-guide.md` for startup and point reloads to the running policy container (`http://localhost:8083` by default).
+> **Note:** If you are only using the workspace devstack, refer to `../unison-docs/dev/developer-guide.md` for startup and point reloads to the running policy container (`http://localhost:8083` by default).
 
 ## Features
 
