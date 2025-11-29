@@ -36,4 +36,7 @@ jobs:
           pip install pytest pyyaml
 
       - name: Run pytest
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+          OTEL_SDK_DISABLED: "true"
         run: pytest -q
