@@ -509,6 +509,7 @@ def evaluate(
     event_id = request.headers.get("X-Event-ID")
     # Extract person_id if provided
     person_id = context.get("person_id", "unknown")
+    auth_scope_val = context.get("auth_scope")
     # Evaluate rules if available
     decision = {
         "allowed": True,
@@ -530,7 +531,7 @@ def evaluate(
             ok = True
             if intent_prefix and not str(capability_id).startswith(str(intent_prefix)):
                 ok = False
-            if ok and auth_scope and str(context.get("auth_scope")) != str(auth_scope):
+            if ok and auth_scope and str(auth_scope_val) != str(auth_scope):
                 ok = False
             if ok and data_class:
                 sc = (context.get("safety_context") or {}).get("data_classification")
@@ -570,9 +571,21 @@ def evaluate(
         event_id=event_id,
         capability_id=capability_id,
         person_id=person_id,
+        auth_scope=auth_scope_val,
         decision=decision,
         rules=len(_get_current_rules()),
     )
+    if isinstance(auth_scope_val, str) and auth_scope_val.startswith("bci."):
+        log_json(
+            logging.INFO,
+            "policy_evaluate_bci",
+            service="unison-policy",
+            event_id=event_id,
+            capability_id=capability_id,
+            person_id=person_id,
+            auth_scope=auth_scope_val,
+            decision=decision,
+        )
     return {
         "capability_id": capability_id,
         "decision": decision,

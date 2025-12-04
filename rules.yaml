@@ -4,6 +4,43 @@
 #   match.time_window.start/end (HH:MM UTC), match.persons (list of person_id)
 # Decision: action=allow|deny|require_confirmation, reason, suggested_alternative (optional)
 
+# BCI access controls
+- match:
+    auth_scope: "bci.raw.read"
+  decision:
+    action: "require_confirmation"
+    reason: "raw-neural-data-requires-explicit-confirmation"
+
+- match:
+    auth_scope: "bci.export"
+  decision:
+    action: "require_confirmation"
+    reason: "neural-data-export-requires-confirmation"
+
+- match:
+    auth_scope: "bci.device.pair"
+  decision:
+    action: "require_confirmation"
+    reason: "device-pairing-requires-user-approval"
+
+- match:
+    auth_scope: "bci.hid.map"
+  decision:
+    action: "require_confirmation"
+    reason: "hid-mapping-requires-user-approval"
+
+- match:
+    auth_scope: "bci.profile.manage"
+  decision:
+    action: "require_confirmation"
+    reason: "bci-profile-changes-require-approval"
+
+- match:
+    auth_scope: "bci.intent.subscribe"
+  decision:
+    action: "allow"
+    reason: "decoded-bci-intents-allowed-with-consent"
+
 # Inference rules - Phase 9
 - match:
     intent_prefix: "summarize.doc"

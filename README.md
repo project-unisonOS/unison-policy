@@ -14,6 +14,7 @@ The policy service:
 - Enforces privacy zones and data protection requirements
 - Provides configurable rule engine for custom policies
 - Supports emergency workflows and safety protocols
+- Gating BCI access (raw/export/device pair/HID map/intents) via consent scopes and audit trails
 
 ## Current Status
 
