@@ -507,15 +507,17 @@ def evaluate(
     _reload_default_rules_if_needed()
     _metrics["/evaluate"] += 1
     event_id = request.headers.get("X-Event-ID")
-    # Extract person_id if provided
-    person_id = context.get("person_id", "unknown")
-    auth_scope_val = context.get("auth_scope")
+    # Extract person_id if provided; Action Envelope compatible fields
+    person_id = context.get("person_id") or context.get("person", {}).get("id") or "unknown"
+    auth_scope_val = context.get("auth_scope") or (context.get("policy_context") or {}).get("scopes")
+    action_envelope = context.get("action_envelope")
     # Evaluate rules if available
     decision = {
         "allowed": True,
         "require_confirmation": False,
         "reason": "default-allow",
         "suggested_alternative": None,
+        "risk_level": (action_envelope or {}).get("risk_level") if isinstance(action_envelope, dict) else None,
     }
 
     try:
@@ -527,6 +529,7 @@ def evaluate(
             data_class = (match.get("safety_context") or {}).get("data_classification")
             time_window = match.get("time_window", {})
             persons = match.get("persons")
+            device_class = (match.get("target") or {}).get("device_class")
 
             ok = True
             if intent_prefix and not str(capability_id).startswith(str(intent_prefix)):
@@ -536,6 +539,12 @@ def evaluate(
             if ok and data_class:
                 sc = (context.get("safety_context") or {}).get("data_classification")
                 if str(sc) != str(data_class):
+                    ok = False
+            if ok and device_class:
+                target = None
+                if isinstance(action_envelope, dict):
+                    target = action_envelope.get("target")
+                if not isinstance(target, dict) or str(target.get("device_class")) != str(device_class):
                     ok = False
             if ok and time_window:
                 start = time_window.get("start")
@@ -555,11 +564,29 @@ def evaluate(
             reason = dec.get("reason", f"rule:{intent_prefix or '*'}")
             suggested = dec.get("suggested_alternative")
             if action == "deny":
-                decision = {"allowed": False, "require_confirmation": False, "reason": reason, "suggested_alternative": suggested}
+                decision = {
+                    "allowed": False,
+                    "require_confirmation": False,
+                    "reason": reason,
+                    "suggested_alternative": suggested,
+                    "risk_level": decision.get("risk_level"),
+                }
             elif action == "require_confirmation":
-                decision = {"allowed": False, "require_confirmation": True, "reason": reason, "suggested_alternative": suggested}
+                decision = {
+                    "allowed": False,
+                    "require_confirmation": True,
+                    "reason": reason,
+                    "suggested_alternative": suggested,
+                    "risk_level": decision.get("risk_level"),
+                }
             else:
-                decision = {"allowed": True, "require_confirmation": False, "reason": reason, "suggested_alternative": suggested}
+                decision = {
+                    "allowed": True,
+                    "require_confirmation": False,
+                    "reason": reason,
+                    "suggested_alternative": suggested,
+                    "risk_level": decision.get("risk_level"),
+                }
             break
     except Exception as e:
         logger.exception("policy_eval_error: %s", e)
@@ -574,6 +601,8 @@ def evaluate(
         auth_scope=auth_scope_val,
         decision=decision,
         rules=len(_get_current_rules()),
+        target=(action_envelope or {}).get("target") if isinstance(action_envelope, dict) else None,
+        risk_level=(action_envelope or {}).get("risk_level") if isinstance(action_envelope, dict) else None,
     )
     if isinstance(auth_scope_val, str) and auth_scope_val.startswith("bci."):
         log_json(
