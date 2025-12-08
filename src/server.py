@@ -107,7 +107,27 @@ def _set_rules(rules: List[Dict[str, Any]]) -> None:
     globals()["_RULES"] = _RULES_REF['value']
 
 
-_set_rules(load_rules(str(RULES_PATH)))
+# Default seed rules if no external rule file is provided.
+DEFAULT_RULES: List[Dict[str, Any]] = [
+    # Deny high-risk actions without explicit consent
+    {
+        "match": {"intent_prefix": "proposed_action", "action_envelope.risk_level": "high"},
+        "decision": {"action": "require_confirmation", "reason": "high-risk-action"},
+    },
+    # Deny robot actuation by default
+    {
+        "match": {"target": {"device_class": "robot"}},
+        "decision": {"action": "deny", "reason": "robot-actuation-disabled"},
+    },
+    # Allow low/medium home actions when actuation scopes are present
+    {
+        "match": {"intent_prefix": "proposed_action", "policy_context.scopes": "actuation.home.*"},
+        "decision": {"action": "allow", "reason": "actuation-home-scope"},
+    },
+]
+
+seed_rules = load_rules(str(RULES_PATH)) or DEFAULT_RULES
+_set_rules(seed_rules)
 
 
 def _reload_default_rules_if_needed() -> None:
@@ -530,6 +550,8 @@ def evaluate(
             time_window = match.get("time_window", {})
             persons = match.get("persons")
             device_class = (match.get("target") or {}).get("device_class")
+            match_scope = match.get("policy_context.scopes")
+            match_risk = match.get("action_envelope.risk_level")
 
             ok = True
             if intent_prefix and not str(capability_id).startswith(str(intent_prefix)):
@@ -545,6 +567,19 @@ def evaluate(
                 if isinstance(action_envelope, dict):
                     target = action_envelope.get("target")
                 if not isinstance(target, dict) or str(target.get("device_class")) != str(device_class):
+                    ok = False
+            if ok and match_scope:
+                scopes = (context.get("policy_context") or {}).get("scopes") or []
+                if isinstance(scopes, list):
+                    if not any(str(s) == str(match_scope) or str(s).startswith(str(match_scope).rstrip('*').rstrip('.')) for s in scopes):
+                        ok = False
+                else:
+                    ok = False
+            if ok and match_risk:
+                risk = None
+                if isinstance(action_envelope, dict):
+                    risk = action_envelope.get("risk_level")
+                if str(risk) != str(match_risk):
                     ok = False
             if ok and time_window:
                 start = time_window.get("start")
