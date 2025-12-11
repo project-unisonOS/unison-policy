@@ -6,6 +6,6 @@ cryptography==41.0.7
 
 # P0-2: Dependencies for consent grant JWT functionality
 python-jose[cryptography]==3.3.0
-redis==5.0.1
+redis==7.1.0
 
 # unison-common package (local install)
