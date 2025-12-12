@@ -16,5 +16,5 @@ jobs:
     with:
       image_name: unison-policy
       domain: policy
-      service_port: "8080"
+      service_port: "8083"
     secrets: inherit
