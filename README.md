@@ -1,421 +1,64 @@
 # unison-policy
 
-The policy service is the safety and consent gate for the Unison system, providing real-time policy evaluation, consent management, and comprehensive audit logging.
+Runtime policy, grant, bundle, and rule-management service for UnisonOS.
 
 ## Status
-Core service (active) — enforcement layer for orchestrator; devstack port `8083`.
+Core service (active). The implementation is a FastAPI app in `src/server.py` backed by `rules.yaml`, signed bundle files, and optional Redis settings from `src/settings.py`.
 
-## Purpose
+## What is implemented
+- Policy evaluation via `POST /evaluate`.
+- Rule inspection and replacement via `GET /rules`, `POST /rules`, and `GET /rules/summary`.
+- Signed bundle inspection, reload, and verification endpoints.
+- Consent/grant issuance, revocation, introspection, and statistics endpoints.
+- Health, readiness, and Prometheus-style metrics endpoints.
+- Hot-reload history and reload metrics.
 
-The policy service:
-- Evaluates whether actions are allowed based on safety, consent, and authorization rules
-- Captures and manages explicit consent for high-impact actions
-- Maintains comprehensive audit logs of all policy decisions and actions
-- Enforces privacy zones and data protection requirements
-- Provides configurable rule engine for custom policies
-- Supports emergency workflows and safety protocols
-- Gating BCI access (raw/export/device pair/HID map/intents) via consent scopes and audit trails
+## API surface
+- `GET /health`, `GET /healthz`
+- `GET /ready`, `GET /readyz`
+- `GET /metrics`
+- `GET /rules`
+- `POST /rules`
+- `GET /rules/summary`
+- `POST /evaluate`
+- `GET /bundle`
+- `POST /reload`
+- `POST /bundle/reload`
+- `POST /bundle/verify`
+- `GET /bundle/policies`
+- `GET /reload/history`
+- `GET /reload/stats`
+- `POST /grants`
+- `POST /grants/{jti}/revoke`
+- `POST /grants/introspect`
+- `GET /grants/stats`
 
-## Current Status
-
-### ✅ Implemented
-- FastAPI-based HTTP service with health endpoints
-- Real-time policy evaluation engine with configurable rules
-- Consent management with explicit capture and verification
-- Comprehensive audit logging with correlation IDs
-- Privacy zone enforcement and data protection
-- Emergency workflow support and safety protocols
-- Role-based access control for policy administration
-- Integration with orchestrator for real-time decision making
-- Structured logging and monitoring capabilities
-
-### 🚧 In Progress
-- Machine learning-based policy recommendations
-- Advanced consent flow with biometric verification
-- Cross-jurisdictional compliance frameworks
-- Real-time threat detection and response
-
-### 📋 Planned
-- Adaptive policy learning from behavior patterns
-- Integration with external compliance systems
-- Advanced analytics for policy optimization
-- Multi-tenant policy management
-
-## Quick Start
-
-### Local Development
+## Run locally
 ```bash
-# Clone and setup
-git clone https://github.com/project-unisonOS/unison-policy
-cd unison-policy
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run with default policies
+python3 -m venv .venv && . .venv/bin/activate
+pip install -c ../constraints.txt -r requirements.txt
+cp .env.example .env
 python src/server.py
 ```
 
-### Docker Deployment
-```bash
-# Using the development stack
-cd ../unison-devstack
-docker compose up -d policy
+## Key configuration
+- `UNISON_POLICY_RULES`
+- `UNISON_POLICY_BUNDLE`
+- `UNISON_CONSENT_SECRET`
+- `UNISON_CONSENT_AUDIENCE`
+- `UNISON_CONSENT_DEFAULT_TTL_HOURS`
+- `UNISON_CONSENT_ISSUER`
+- `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`
 
-# Health check
-curl http://localhost:8083/health
-```
+## Supporting files
+- `rules.yaml` — default live rule set
+- `bundle.signed.json` and `production-bundle.json` — bundle inputs/examples
+- `docs/BUNDLE_FORMAT.md`
+- `docs/HOT_RELOAD.md`
 
-## API Reference
-
-### Core Endpoints
-- `GET /health` - Service health check
-- `GET /ready` - Policy engine readiness check
-- `POST /evaluate` - Evaluate policy for action
-- `POST /consent` - Capture explicit consent
-- `GET /consent/{consent_id}` - Retrieve consent status
-- `POST /audit` - Log executed action
-- `GET /audit` - Query audit logs
-- `GET /rules` - List active policies
-- `POST /rules` - Update policy rules (admin only)
-
-### Policy Evaluation
-```bash
-# Evaluate action permission
-curl -X POST http://localhost:8083/evaluate \
-  -H "Authorization: Bearer <access-token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "action": "send_message",
-    "context": {
-      "recipient": "contact-123",
-      "person_id": "person-456",
-      "privacy_zone": "work"
-    },
-    "consent_required": true
-  }'
-
-# Capture consent
-curl -X POST http://localhost:8083/consent \
-  -H "Authorization: Bearer <access-token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "person_id": "person-456",
-    "action": "send_message",
-    "consent_type": "explicit",
-    "verification": "biometric",
-    "expires_at": "2024-01-01T13:00:00Z"
-  }'
-```
-
-Additional docs: workspace `unison-docs/dev/unison-architecture-overview.md` and `unison-docs/dev/developer-guide.md` cover how this service
-fits into the platform; legacy `unison-docs` references are archived.
-
-## Configuration
-
-### Environment Variables
-Copy `.env.example` and adjust for your environment.
-```bash
-# Service Configuration
-POLICY_PORT=8083                     # Service port
-POLICY_HOST=0.0.0.0                  # Service host
-
-# Policy Engine
-POLICY_RULES_PATH=/config/rules.json # Policy rules file
-POLICY_DEFAULT_ACTION=deny           # Default action for undefined rules
-POLICY_CACHE_TTL=300                 # Policy decision cache TTL
-
-# Consent Management
-POLICY_CONSENT_TTL=3600              # Consent expiration (seconds)
-POLICY_CONSENT_STORAGE=database      # Consent storage backend
-POLICY_BIOMETRIC_ENABLED=true        # Enable biometric verification
-
-# Audit and Logging
-POLICY_AUDIT_RETENTION_DAYS=2555     # Audit log retention (7 years)
-POLICY_LOG_LEVEL=INFO                # Logging verbosity
-POLICY_ENABLE_METRICS=true           # Enable metrics collection
-
-# Safety and Emergency
-POLICY_EMERGENCY_CONTACTS=emergency@unisonos.org
-POLICY_SAFETY_TIMEOUTS=30            # Safety check timeouts
-```
-
-## Policy Rules
-
-### Rule Structure
-```json
-{
-  "rules": [
-    {
-      "id": "send_message_policy",
-      "name": "Message Sending Policy",
-      "description": "Controls who can send messages to whom",
-      "conditions": {
-        "action": "send_message",
-        "privacy_zones": ["work", "public"],
-        "time_restrictions": {
-          "allowed_hours": ["09:00-17:00"],
-          "timezone": "person_timezone"
-        }
-      },
-      "actions": {
-        "allow": true,
-        "consent_required": true,
-        "verification": "explicit",
-        "audit_level": "high"
-      },
-      "exceptions": [
-        {
-          "condition": "emergency_contact",
-          "action": "allow_immediate"
-        }
-      ]
-    }
-  ]
-}
-```
-
-### High-Impact Actions
-The policy service manages consent for:
-- **Communication**: Sending messages, emails, making calls
-- **Location Sharing**: Sharing current location or location history
-- **Financial Actions**: Payments, transfers, purchase approvals
-- **Emergency Workflows**: Calling for help, alerting contacts
-- **Data Sharing**: Sharing personal data with third parties
-- **System Changes**: Modifying system settings or preferences
-
-## Development
-
-### Setup
-```bash
-# Install development dependencies
-pip install -r requirements-dev.txt
-
-# Load test policies
-python scripts/load_test_policies.py
-
-# Run tests
-pytest tests/
-
-# Run with debug logging
-LOG_LEVEL=DEBUG python src/server.py
-```
-
-### Testing
-```bash
-# Unit tests
-pytest tests/unit/
-
-# Integration tests
-pytest tests/integration/
-
-# Policy engine tests
-pytest tests/policy/
-
-# Consent flow tests
-pytest tests/consent/
-
-# Security tests
-pytest tests/security/
-```
-
-### Contributing
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes with comprehensive tests
-4. Ensure all policy and security tests pass
-5. Submit a pull request with detailed description
-
-## Security and Privacy
-
-### Policy Enforcement
-- **Real-time Evaluation**: Sub-millisecond policy decisions
-- **Context-Aware Rules**: Policies adapt to context and environment
-- **Consent Verification**: Multi-factor consent verification
-- **Audit Trail**: Complete audit trail for all decisions
-- **Privacy Zones**: Enforce location and context-based privacy
-
-### Consent Management
-- **Explicit Consent**: Clear, informed consent for all actions
-- **Granular Control**: Fine-grained consent for different action types
-- **Revocation**: Instant consent revocation and action cancellation
-- **Biometric Verification**: Optional biometric consent verification
-- **Consent History**: Complete history of consent decisions
-
-### Compliance
-- **GDPR Compliance**: Explicit consent management and right to withdraw
-- **Audit Requirements**: Comprehensive audit logging for compliance
-- **Data Protection**: Privacy by design in all policy decisions
-- **Safety Standards**: Emergency and safety protocol compliance
-
-## Architecture
-
-### Policy Service Components
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   API Layer     │───▶│  Policy Engine   │───▶│  Rule Manager   │
-│ (FastAPI)       │    │ (Evaluator)      │    │ (Rules & Logic) │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-                                │
-                                ▼
-                       ┌──────────────────┐
-                       │ Consent Manager  │
-                       │ (Capture &       │
-                       │  Verification)   │
-                       └──────────────────┘
-                                │
-                                ▼
-                       ┌──────────────────┐
-                       │   Audit Layer    │
-                       │ (Logging &       │
-                       │  Compliance)     │
-                       └──────────────────┘
-```
-
-### Decision Flow
-1. **Request**: Service requests policy evaluation
-2. **Context Analysis**: Analyze action context and conditions
-3. **Rule Evaluation**: Apply relevant policy rules
-4. **Consent Check**: Determine if consent is required
-5. **Decision**: Return allow/deny with reasoning
-6. **Audit**: Log decision for compliance
-
-## Monitoring
-
-### Health Checks
-- `/health` - Basic service health
-- `/ready` - Policy engine and rules readiness
-- `/metrics` - Policy operation metrics
-
-### Metrics
-Key metrics available:
-- Policy evaluations per second
-- Consent requests and grants
-- Audit log volume
-- Rule cache hit rates
-- Decision latency by rule type
-- Safety protocol activations
-
-### Logging
-Structured JSON logging with correlation IDs:
-- Policy decisions and reasoning
-- Consent capture and verification
-- Safety protocol activations
-- Rule changes and updates
-- Compliance and audit events
-
-## Emergency and Safety
-
-### Emergency Workflows
-```bash
-# Trigger emergency protocol
-curl -X POST http://localhost:8083/emergency \
-  -H "Authorization: Bearer <access-token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "person_id": "person-456",
-    "emergency_type": "medical",
-    "location": {"lat": 40.7128, "lon": -74.0060},
-    "contacts": ["emergency-123", "contact-456"]
-  }'
-
-# Check safety status
-curl -X GET http://localhost:8083/safety/person-456 \
-  -H "Authorization: Bearer <access-token>"
-```
-
-### Safety Features
-- **Emergency Contacts**: Pre-configured emergency contact lists
-- **Location Sharing**: Automatic location sharing in emergencies
-- **Safety Check-ins**: Regular safety check-in protocols
-- **Alert Systems**: Multi-channel alert notifications
-- **Escalation Protocols**: Automatic escalation for non-responsive situations
-
-## Related Services
-
-### Dependencies
-- **unison-auth** - Authentication and authorization
-- **unison-orchestrator** - Primary policy consumer
-- **unison-context** - Context for policy evaluation
-
-### Consumers
-- **unison-orchestrator** - Real-time policy evaluation
-- **unison-inference** - Content policy enforcement
-- **I/O modules** - Action permission checks
-- **External services** - Third-party policy compliance
-
-## Troubleshooting
-
-### Common Issues
-
-#### Policy Evaluation Failures
-```bash
-# Check service health
-curl http://localhost:8083/health
-
-# Verify rules are loaded
-curl -X GET http://localhost:8083/rules \
-  -H "Authorization: Bearer <token>"
-
-# Check rule syntax
-python scripts/validate_rules.py /config/rules.json
-```
-
-#### Consent Issues
-```bash
-# Check consent status
-curl -X GET http://localhost:8083/consent/consent-123 \
-  -H "Authorization: Bearer <token>"
-
-# Test consent flow
-python scripts/test_consent.py --person-id person-456
-```
-
-#### Performance Issues
-```bash
-# Check policy metrics
-curl http://localhost:8083/metrics
-
-# Monitor rule evaluation performance
-docker compose logs policy | grep "evaluation_time"
-```
-
-### Debug Mode
-```bash
-# Enable verbose logging
-LOG_LEVEL=DEBUG POLICY_DEBUG_RULES=true python src/server.py
-
-# Monitor policy decisions
-docker compose logs -f policy | jq '.'
-
-# Test policy engine
-python scripts/test_policy.py --all
-```
-
-## Version Compatibility
-
-### Compatibility snapshot
-- Policy `1.0.0` ↔ unison-common `1.0.0`, auth `1.0.0`, Docker 20.10+
-- Policy `0.9.x` ↔ unison-common `0.9.x`, auth `0.9.x`, Docker 20.04+
-- For full history, see [`unison-docs/dev/compatibility-matrix.md`](../unison-docs/dev/compatibility-matrix.md).
-
-## Testing (local)
+## Tests
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
 pip install -c ../constraints.txt -r requirements.txt
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 OTEL_SDK_DISABLED=true python -m pytest
 ```
-
-## Docs
-
-Full docs at https://project-unisonos.github.io
-
-## License
-
-Licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.
-
-## Support
-
-- **Issues**: [GitHub Issues](https://github.com/project-unisonOS/unison-policy/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/project-unisonOS/unison-policy/discussions)
-- **Security**: Report security issues to [security@unisonos.org](mailto:security@unisonos.org)
