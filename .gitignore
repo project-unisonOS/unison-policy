@@ -39,4 +39,4 @@ out/
 *.exe
 *.dmg
 *.AppImage
-
+keys/private_key.pem
