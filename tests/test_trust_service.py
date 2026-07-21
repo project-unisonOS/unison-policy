@@ -1,6 +1,6 @@
 from dataclasses import asdict
 
-from src.trust_service import TrustEvaluator, TrustRepository, request_hash
+from trust_service import TrustEvaluator, TrustRepository, request_hash
 
 
 BASE = {"principal_id": "p1", "assistant_id": "a1", "purpose": "assist", "audience": ["self"], "space_id": "private:p1", "assurance": "local-unlocked", "data_classes": ["personal"], "action": "read", "requested_fields": ["title", "time", "private_note", "location"]}
