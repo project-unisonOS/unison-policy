@@ -22,16 +22,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12'
 
       - name: Install deps
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install "git+https://github.com/project-unisonOS/unison-common.git@571d5d521d6e534157e856f330371e0030379b07"
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install pytest pyyaml
 
@@ -39,4 +40,5 @@ jobs:
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
           OTEL_SDK_DISABLED: "true"
+          UNISON_PRINCIPAL_BINDING_TEST_BYPASS: "true"
         run: pytest -q

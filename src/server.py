@@ -26,9 +26,15 @@ except ImportError:  # pragma: no cover
     from hot_reload import hot_reload_bundle, get_reload_history, get_reload_stats  # type: ignore
 from unison_common.tracing import initialize_tracing, instrument_fastapi, instrument_httpx
 from unison_common.tracing_middleware import TracingMiddleware
+from unison_common.principal_middleware import PrincipalBindingMiddleware, get_bound_principal
+try:
+    from .trust_service import router as trust_router
+except ImportError:  # pragma: no cover
+    from trust_service import router as trust_router  # type: ignore
 
 # P0-2: Imports for consent grant JWT functionality
-from jose import jwt, JWTError
+import jwt
+from jwt import PyJWTError as JWTError
 import redis
 import threading
 import uuid as uuid_lib
@@ -39,8 +45,15 @@ except ImportError:  # pragma: no cover
     from settings import PolicyServiceSettings  # type: ignore
 
 app = FastAPI(title="unison-policy")
+app.include_router(trust_router)
 if BatonMiddleware:
     app.add_middleware(BatonMiddleware)
+app.add_middleware(
+    PrincipalBindingMiddleware,
+    service_name="policy",
+    public_paths={"/health", "/healthz", "/ready", "/readyz", "/metrics", "/docs", "/openapi.json"},
+    allow_test_bypass=True,
+)
 
 logger = configure_logging("unison-policy")
 
@@ -528,7 +541,14 @@ def evaluate(
     _metrics["/evaluate"] += 1
     event_id = request.headers.get("X-Event-ID")
     # Extract person_id if provided; Action Envelope compatible fields
-    person_id = context.get("person_id") or context.get("person", {}).get("id") or "unknown"
+    try:
+        principal = get_bound_principal(request)
+        person_id = principal.person_id or "unknown"
+        context["principal_id"] = principal.principal_id
+        if principal.person_id:
+            context["person_id"] = principal.person_id
+    except RuntimeError:
+        person_id = context.get("person_id") or context.get("person", {}).get("id") or "unknown"
     auth_scope_val = context.get("auth_scope") or (context.get("policy_context") or {}).get("scopes")
     action_envelope = context.get("action_envelope")
     # Evaluate rules if available
