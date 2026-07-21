@@ -29,7 +29,8 @@ from unison_common.tracing_middleware import TracingMiddleware
 from unison_common.principal_middleware import PrincipalBindingMiddleware, get_bound_principal
 
 # P0-2: Imports for consent grant JWT functionality
-from jose import jwt, JWTError
+import jwt
+from jwt import PyJWTError as JWTError
 import redis
 import threading
 import uuid as uuid_lib
