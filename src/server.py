@@ -27,6 +27,10 @@ except ImportError:  # pragma: no cover
 from unison_common.tracing import initialize_tracing, instrument_fastapi, instrument_httpx
 from unison_common.tracing_middleware import TracingMiddleware
 from unison_common.principal_middleware import PrincipalBindingMiddleware, get_bound_principal
+try:
+    from .trust_service import router as trust_router
+except ImportError:  # pragma: no cover
+    from trust_service import router as trust_router  # type: ignore
 
 # P0-2: Imports for consent grant JWT functionality
 import jwt
@@ -41,6 +45,7 @@ except ImportError:  # pragma: no cover
     from settings import PolicyServiceSettings  # type: ignore
 
 app = FastAPI(title="unison-policy")
+app.include_router(trust_router)
 if BatonMiddleware:
     app.add_middleware(BatonMiddleware)
 app.add_middleware(

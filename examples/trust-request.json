@@ -1,0 +1,12 @@
+{
+  "principal_id": "synthetic-person",
+  "assistant_id": "synthetic-assistant",
+  "purpose": "schedule",
+  "audience": ["self"],
+  "space_id": "private:synthetic-person",
+  "assurance": "local-unlocked",
+  "data_classes": ["personal"],
+  "action": "read",
+  "channel": "local",
+  "requested_fields": ["title", "start_time", "end_time", "private_notes"]
+}
