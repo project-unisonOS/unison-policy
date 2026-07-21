@@ -11,6 +11,7 @@ from pathlib import Path
 from threading import RLock
 from typing import Any, Iterable
 from uuid import uuid4
+from decimal import Decimal, InvalidOperation
 
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import APIRouter, Body, HTTPException
@@ -153,6 +154,8 @@ class TrustEvaluator:
             decision = DisclosureDecision(DecisionOutcome.DENY, "unknown-authority", "I did not act because these authority values are unknown: " + ", ".join(unknown))
         elif request.untrusted_input and request.action in HIGH_RISK_ACTIONS:
             decision = DisclosureDecision(DecisionOutcome.DENY, "untrusted-instruction", "I treated embedded instructions as untrusted content and did not give them authority.")
+        elif request.capability_id and not grant_id:
+            decision = DisclosureDecision(DecisionOutcome.DENY, "grant-required", "I did not run the capability because no explicit capability grant was supplied.")
         elif grant_id and not self._grant_allows(self.repository.get_grant(grant_id), request):
             decision = DisclosureDecision(DecisionOutcome.DENY, "grant-boundary", "I did not act because the capability grant does not cover this request.")
         elif request.action in HIGH_RISK_ACTIONS and request.assurance not in STRONG_ASSURANCE and SENSITIVE.intersection(request.data_classes):
@@ -186,6 +189,16 @@ class TrustEvaluator:
         if not grant or grant.principal_id != request.principal_id or grant.assistant_id != request.assistant_id:
             return False
         if request.capability_id != grant.capability_id or request.action not in grant.actions or request.purpose not in grant.purposes:
+            return False
+        if grant.expires_at and datetime.fromisoformat(grant.expires_at) <= _utcnow():
+            return False
+        risk_rank = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+        if request.risk_level not in risk_rank or risk_rank[request.risk_level] > risk_rank[grant.max_risk.value]:
+            return False
+        try:
+            if Decimal(request.estimated_cost or "0") > Decimal(grant.max_cost):
+                return False
+        except InvalidOperation:
             return False
         return set(request.audience) <= set(grant.audiences) and set(request.data_classes) <= set(grant.data_classes) and request.space_id in grant.space_ids and set(request.recipient_ids) <= set(grant.recipient_ids)
 
