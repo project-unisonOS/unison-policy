@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   publish:
-    uses: project-unisonOS/unison-platform/.github/workflows/reusable-build.yml@54e36d1abe07199d5746f523c56e0989c3e127a7
+    uses: project-unisonOS/unison-platform/.github/workflows/reusable-build.yml@6b2f2d8f482bd3696a9a0e6df426515c66e73e11
     with:
       image_name: unison-policy
       domain: policy
