@@ -149,6 +149,20 @@ def _reload_default_rules_if_needed() -> None:
         _set_rules(load_rules(str(RULES_PATH)))
         _RESET_RULES_AFTER_TEST = False
 
+
+def _new_bundle_signer() -> PolicyBundleSigner:
+    """Create a signer whose generated keys live outside the source tree."""
+    key_dir = Path(
+        os.getenv(
+            "UNISON_POLICY_KEY_DIR",
+            str(Path.home() / ".local" / "share" / "unison-policy" / "keys"),
+        )
+    )
+    return PolicyBundleSigner(
+        private_key_path=str(key_dir / "private_key.pem"),
+        public_key_path=str(key_dir / "public_key.pem"),
+    )
+
 def load_bundle(path: str) -> Optional[Dict[str, Any]]:
     """Load and verify a signed policy bundle"""
     if not os.path.exists(path):
@@ -159,7 +173,7 @@ def load_bundle(path: str) -> Optional[Dict[str, Any]]:
         # Initialize bundle signer
         global _BUNDLE_SIGNER
         if _BUNDLE_SIGNER is None:
-            _BUNDLE_SIGNER = PolicyBundleSigner()
+            _BUNDLE_SIGNER = _new_bundle_signer()
         
         # Load bundle
         bundle = _BUNDLE_SIGNER.load_bundle(path)
@@ -205,7 +219,7 @@ def load_policies_from_bundle(bundle: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 # Initialize bundle signer
 if _BUNDLE_SIGNER is None:
-    _BUNDLE_SIGNER = PolicyBundleSigner()
+    _BUNDLE_SIGNER = _new_bundle_signer()
 
 # Initialize bundle if available
 bundle = load_bundle(str(BUNDLE_PATH))
@@ -744,7 +758,7 @@ def verify_bundle_endpoint(bundle_path: str = Body(..., embed=True)):
     # Initialize bundle signer if needed
     global _BUNDLE_SIGNER
     if _BUNDLE_SIGNER is None:
-        _BUNDLE_SIGNER = PolicyBundleSigner()
+        _BUNDLE_SIGNER = _new_bundle_signer()
     
     # Load and verify bundle
     try:
