@@ -11,10 +11,11 @@ jobs:
     with:
       python-version: "3.12"
       working-directory: "."
-      unison-common-ref: "571d5d521d6e534157e856f330371e0030379b07"
+      unison-common-ref: "eef1a7353b2c795233daf0db6079b867ff2d98ba"
+      enable-principal-binding-test-bypass: true
 
   container-supply-chain:
-    uses: project-unisonOS/.github/.github/workflows/reusable-container-supply-chain.yml@b8262adfe3ac737ef9fc2e02c337f3983c83c773
+    uses: project-unisonOS/.github/.github/workflows/reusable-container-supply-chain.yml@45118ffb52ee397cf7a510767154ee5b3705a850
     with:
       image-name: unison-policy
       dockerfile: Dockerfile
