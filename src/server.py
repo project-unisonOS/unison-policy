@@ -973,4 +973,5 @@ def grant_stats_endpoint():
         }
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8083)
+    # Container ingress requires binding the service on every network interface.
+    uvicorn.run(app, host="0.0.0.0", port=8083)  # nosec B104
