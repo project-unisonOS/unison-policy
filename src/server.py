@@ -27,6 +27,11 @@ except ImportError:  # pragma: no cover
 from unison_common.tracing import initialize_tracing, instrument_fastapi, instrument_httpx
 from unison_common.tracing_middleware import TracingMiddleware
 from unison_common.principal_middleware import PrincipalBindingMiddleware, get_bound_principal
+from unison_common.governed_memory import TaxonomySecurityReview
+try:
+    from .taxonomy_policy import TaxonomyPolicyIssuer
+except ImportError:  # pragma: no cover
+    from taxonomy_policy import TaxonomyPolicyIssuer  # type: ignore
 try:
     from .trust_service import router as trust_router
 except ImportError:  # pragma: no cover
@@ -69,6 +74,8 @@ def load_settings() -> PolicyServiceSettings:
 
 
 SETTINGS = load_settings()
+_TAXONOMY_ISSUER = TaxonomyPolicyIssuer(Path(os.getenv(
+    "UNISON_TAXONOMY_POLICY_SIGNING_KEY", str(Path.home() / ".unison" / "taxonomy-policy.pem"))))
 CONSENT_CONFIG = SETTINGS.consent
 REDIS_CONFIG = SETTINGS.redis
 RULES_PATH = SETTINGS.rules_path
@@ -544,6 +551,26 @@ def update_rules(request: Request, body: Dict[str, Any] = Body(...)):
         _RESET_RULES_AFTER_TEST = True
     log_json(logging.INFO, "rules_updated", service="unison-policy", event_id=event_id, count=len(rules))
     return {"ok": True, "rules": len(rules)}
+
+@app.post("/v1/taxonomy/security-domain/issuances")
+def issue_taxonomy_security_domain(request: Request, body: Dict[str, Any] = Body(...)):
+    """Issue a signed, person/proposal-bound approval after complete boundary review."""
+    principal = get_bound_principal(request)
+    owner = principal.person_id or str(body.get("person_id") or "")
+    if not owner:
+        raise HTTPException(status_code=403, detail="a person-bound principal is required")
+    try:
+        review = TaxonomySecurityReview.model_validate(body["review"])
+        issuance = _TAXONOMY_ISSUER.issue(owner_person_id=owner, review=review)
+        return {"issuance": issuance.model_dump(mode="json")}
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/v1/taxonomy/security-domain/public-key")
+def taxonomy_security_domain_public_key():
+    return PlainTextResponse(_TAXONOMY_ISSUER.public_key_pem().decode())
+
 
 @app.post("/evaluate")
 def evaluate(
