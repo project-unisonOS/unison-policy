@@ -32,7 +32,7 @@ jobs:
       - name: Install deps
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          python -m pip install "git+https://github.com/project-unisonOS/unison-common.git@571d5d521d6e534157e856f330371e0030379b07"
+          python -m pip install "git+https://github.com/project-unisonOS/unison-common.git@80a76745642f1dd64eb8b89105be803f78baf81c"
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install pytest pyyaml
 
