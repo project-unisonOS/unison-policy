@@ -1,4 +1,4 @@
-FROM python:3.14-slim@sha256:ce40764625a4ff50df3548277632e7f96c4e77fe75fa848aae9885476e7df5a4 AS common_wheel
+FROM python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928 AS common_wheel
 
 ARG UNISON_COMMON_REF="eef1a7353b2c795233daf0db6079b867ff2d98ba"
 RUN apt-get update && apt-get upgrade -y \
@@ -7,7 +7,7 @@ RUN apt-get update && apt-get upgrade -y \
     && pip wheel --no-cache-dir --no-deps --wheel-dir /tmp/wheels \
        "git+https://github.com/project-unisonOS/unison-common.git@${UNISON_COMMON_REF}"
 
-FROM python:3.14-slim@sha256:ce40764625a4ff50df3548277632e7f96c4e77fe75fa848aae9885476e7df5a4
+FROM python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928
 
 ARG REPO_PATH="."
 WORKDIR /app
